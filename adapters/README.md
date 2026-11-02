@@ -4,20 +4,7 @@
 
 ## MaiBot
 
-1. 把 `maibot/qqbot_music_sing` 整个文件夹复制到 MaiBot 的 `plugins/` 下。
-2. 改 `plugins/qqbot_music_sing/config.toml`：
-
-   ```toml
-   [service]
-   url = "http://127.0.0.1:8766"
-   # 想让插件在服务没开时自己拉起来，就填启动命令和 qqbot-music 目录；留空就要你自己先开服务
-   start_command = "D:/xxx/seed-vc/env/Scripts/python.exe -m qqbot_music serve"
-   start_cwd = "D:/xxx/qqbot-music"
-   ```
-
-3. 重启 MaiBot。麦麦会多一个 `sing` 工具：有人让她唱歌时她会调用，副歌一两分钟后以语音发出来。
-
-插件只依赖 MaiBot 环境里本来就有的 `httpx`、`numpy`（`scipy` 有就用来做降采样，没有也行），不 import 本仓库的代码，两边可以装在不同的 Python 环境。
+插件单独一个仓库：[qqbot-music-maibot](https://github.com/aa1805370178-dot/qqbot-music-maibot)（也可以在 MaiBot 插件市场里装）。装好后麦麦会多一个 `sing` 工具，有人让她唱歌时调用，副歌一两分钟后以语音发出来。插件不 import 本仓库的代码，两边可以装在不同的 Python 环境。
 
 ## 其他框架（AstrBot、NoneBot、自己写的……）
 
@@ -40,6 +27,6 @@
 
 推荐流程：`/find` → `unknown`/`failed` 就 `/learn` 并告诉用户等一会儿 → `ready` 就 `/sing`（这一步要一两分钟，放后台做，唱好再发）。
 
-发 QQ 语音前最好转成单声道 24k，文件小很多；MaiBot 插件里的 `to_voice_wav` 可以直接抄。
+发 QQ 语音前最好转成单声道 24k，文件小很多；[MaiBot 插件](https://github.com/aa1805370178-dot/qqbot-music-maibot/blob/master/plugin.py)里的 `to_voice_wav` 可以直接抄。
 
 服务一次只唱一首，其他请求排队；闲置 `[service] idle_minutes` 分钟后自己退出，所以建议像 MaiBot 插件那样「连不上就拉起来」。

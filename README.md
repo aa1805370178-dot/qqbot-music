@@ -3,7 +3,7 @@
 让 QQ 机器人用**你指定的音色**唱歌：点歌 → 自己去 B 站找原唱 → 分离人声和伴奏 → 换成你的音色 → 发语音。
 
 - 零样本：只要一段 10–25 秒的干净录音当音色参考，不用训练。
-- 不绑框架：核心是一个本地 HTTP 服务，MaiBot、AstrBot 或者任何能发 HTTP 的机器人都能用。仓库里带了 MaiBot 插件。
+- 不绑框架：核心是一个本地 HTTP 服务，MaiBot、AstrBot 或者任何能发 HTTP 的机器人都能用。MaiBot 插件见 [qqbot-music-maibot](https://github.com/aa1805370178-dot/qqbot-music-maibot)。
 - 4G 显存的笔记本卡（GTX 1650 Ti）也能跑，就是慢点。
 
 > 这是一个自用流程整理出来的小工具，不是什么完整产品。换声和分离的模型都是别人的（见文末「用到的项目」），这里做的是把它们串起来，以及踩坑后补上的那些处理。
@@ -65,7 +65,7 @@ python -m qqbot_music cover 某首歌.mp3 out.wav  # 不进曲库，直接整首
 python -m qqbot_music serve      # 默认 http://127.0.0.1:8766，闲置 10 分钟自己退出
 ```
 
-- **MaiBot**：把 `adapters/maibot/qqbot_music_sing` 整个复制到 MaiBot 的 `plugins/` 下，改里面的 `config.toml`。详见 [adapters/README.md](adapters/README.md)。
+- **MaiBot**：装插件 [qqbot-music-maibot](https://github.com/aa1805370178-dot/qqbot-music-maibot)（插件市场或克隆到 `plugins/`）。
 - **其他框架**：调 HTTP 接口就行，接口说明也在 [adapters/README.md](adapters/README.md)。
 
 Windows 可以直接双击 `启动唱歌服务.bat`（先在里面填好 Python 路径）。
@@ -112,7 +112,7 @@ qqbot_music/
   sing.py        唱一首（带缓存）
   service.py     HTTP 服务
   __main__.py    命令行
-adapters/maibot/qqbot_music_sing/   MaiBot 插件
+adapters/README.md                 接机器人的 HTTP 接口说明
 docs/原理与踩坑.md
 ```
 
