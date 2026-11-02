@@ -1,0 +1,6 @@
+config.toml
+library/
+third_party/
+voice/
+__pycache__/
+*.pyc

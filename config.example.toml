@@ -1,0 +1,70 @@
+# qqbot-music 配置。复制成 config.toml 再改；没写的项用这里的默认值。
+# 路径可以写绝对路径，也可以写相对本文件的路径。
+
+[voice]
+# 你要的音色：一段 10–25 秒、干净（无伴奏无混响）的说话或清唱录音。必填。
+reference = "voice/reference.wav"
+# 参考音齿音（s/x/sh）偏尖的话，换声会把它放大成「滋滋」声；开着就先给参考音压一遍齿音。
+deess_reference = true
+
+[library]
+# 曲库目录：library.json（索引）、audio/（原曲）、stems/<id>/（分离好的 vocals.flac + instrumental.flac）、sung/（唱过的缓存）
+dir = "library"
+
+[separate]
+# 分离器：YingMusic-SVC 自带的 BS-Roformer 三轨（主唱 / 和声 / 伴奏），只留主唱和伴奏，和声不要。
+# 需要先 git clone https://github.com/GiantAILab/YingMusic-SVC ，再下 bs_roformer.ckpt（ModelScope 或 Hugging Face）。
+yingmusic_dir = "third_party/YingMusic-SVC"
+checkpoint = "third_party/YingMusic-SVC/ckpt/bs_roformer.ckpt"
+device = "auto"          # auto / cuda / cpu
+# 半精度：auto = 显卡有 Tensor Core（算力 7.0 以上且不是 GTX 16 系）才开。
+# GTX 1650/1660 没有 Tensor Core，开半精度反而慢 3–4 倍。
+half = "auto"            # auto / true / false
+batch_size = 1           # 4G 显存只能 1
+num_overlap = 2          # 重叠块数；1 快一倍但块边界有可听差别，不建议
+
+[convert]
+# 换声后端：seedvc（Seed-VC 零样本，15 步就够，快）或 yingmusic（YingMusic-SVC，100 步，音色更好、慢 4 倍左右）
+backend = "seedvc"
+seedvc_dir = "third_party/seed-vc"
+yingmusic_checkpoint = "third_party/YingMusic-SVC/ckpt/YingMusic-SVC-full.pt"
+steps = 15               # seedvc 建议 15；yingmusic 建议 100（30 也能用）
+cfg_rate = 0.0           # seedvc 建议 0；yingmusic 建议 0.7
+fp16 = true
+
+[pitch]
+# 伴奏永远不变调，人声只按乐句整八度挪（八度同音，挪了也在调上）。
+# 一句的音高中位离参考音的中位超过 move_semitones 个半音，就往参考音那边挪一个八度。
+move_semitones = 9
+# 乐句：有声段之间空隙不超过 phrase_gap 秒的连成一句。
+phrase_gap = 0.25
+# 测出来的音高跟前后 0.4 秒差了 900 音分以上（多半是测错了八度），折回那个八度。
+fix_octave_jumps = true
+
+[post]
+deess = true
+deess_limit = 20.0       # 5–11 kHz 能量占比超过这个百分比的帧压下去
+gate_db = -40            # 原唱主唱比峰值低这么多 dB 的地方，换声结果静音（漏进来的伴奏会被换成杂音）
+vocal_over_instrumental_db = 1.0   # 人声比伴奏响多少 dB（不按原唱响度：分离可能把主唱分走一部分）
+effects = false          # 装了 pedalboard 才生效：高通 100Hz → 轻压缩 → 小混响（默认关，原样最干净）
+
+[sing]
+chorus_only = true       # 默认只唱副歌；调用时 full=true 唱整首
+chorus_min = 15.0        # 副歌段长度（秒）
+chorus_max = 32.0
+
+[download]
+# 学新歌时从哪里找：bilibili（搜索原唱版本）。也可以用命令 add 直接导入本地音频，不联网。
+source = "bilibili"
+# 搜索时先到 QQ 音乐定原唱歌手和时长，B 站版本要对得上（避免下成翻唱、搞笑视频）。
+verify_original = true
+# 你自己 B 站账号的 SESSDATA cookie（浏览器登录 B 站后在开发者工具 → Application → Cookies 里找）。
+# 不填也能试，但未登录的搜索经常被风控、搜不到东西。这是你的登录凭证，别发给别人、别提交到仓库。
+bilibili_sessdata = ""
+
+[service]
+host = "127.0.0.1"
+port = 8766
+idle_minutes = 10        # 闲置这么久自动退出，让出显存；0 = 不退出
+# 启动前结束监听这些端口的进程（比如同一张卡上的 TTS 服务），给换声腾显存。不需要就留空。
+free_ports = []

@@ -1,0 +1,16 @@
+# 装在 Seed-VC 的环境里（它已经带了 torch、torchaudio、librosa、transformers 等）
+numpy
+librosa
+soundfile
+requests
+pyyaml
+tomli; python_version < "3.11"
+av                      # 解码 m4a 等格式，不需要另装 ffmpeg
+# YingMusic 分离器需要的
+ml_collections
+rotary_embedding_torch
+beartype
+hyper_connections
+einops>=0.8
+# 可选：[post] effects = true 时用
+# pedalboard
