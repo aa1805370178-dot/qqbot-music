@@ -6,7 +6,15 @@
 
 插件单独一个仓库：[qqbot-music-maibot](https://github.com/aa1805370178-dot/qqbot-music-maibot)（也可以在 MaiBot 插件市场里装）。装好后麦麦会多一个 `sing` 工具，有人让她唱歌时调用，副歌一两分钟后以语音发出来。插件不 import 本仓库的代码，两边可以装在不同的 Python 环境。
 
-## 其他框架（AstrBot、NoneBot、自己写的……）
+## AstrBot
+
+插件仓库：[astrbot_plugin_zeroshot_sing](https://github.com/aa1805370178-dot/astrbot_plugin_zeroshot_sing)。同样是一个 `sing` 工具，唱好后以语音发到原会话。
+
+## DeepSeek Harness（大肥鱼）
+
+npm 包 [dsh-zeroshot-sing](https://github.com/aa1805370178-dot/dsh-zeroshot-sing)：`dsh plugin --profile web add dsh-zeroshot-sing`。多 `sing`（唱好存 WAV 并在本机播放）和 `learn_song`（主动学歌）两个工具。
+
+## 其他框架（NoneBot、Koishi、自己写的……）
 
 照下面的接口写一个「唱歌」工具/指令即可。所有 JSON 都是 UTF-8。
 

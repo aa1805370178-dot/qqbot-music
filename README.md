@@ -3,7 +3,7 @@
 让 QQ 机器人用**你指定的音色**唱歌：点歌 → 自己去 B 站找原唱 → 分离人声和伴奏 → 换成你的音色 → 发语音。
 
 - 零样本：只要一段 10–25 秒的干净录音当音色参考，不用训练。
-- 不绑框架：核心是一个本地 HTTP 服务，MaiBot、AstrBot 或者任何能发 HTTP 的机器人都能用。MaiBot 插件见 [qqbot-music-maibot](https://github.com/aa1805370178-dot/qqbot-music-maibot)。
+- 不绑框架：核心是一个本地 HTTP 服务，任何能发 HTTP 的机器人都能用。已有插件：MaiBot、AstrBot、DeepSeek Harness（大肥鱼），见下面「接机器人」。
 - 4G 显存的笔记本卡（GTX 1650 Ti）也能跑，就是慢点。
 
 > 这是一个自用流程整理出来的小工具，不是什么完整产品。换声和分离的模型都是别人的（见文末「用到的项目」），这里做的是把它们串起来，以及踩坑后补上的那些处理。
@@ -66,6 +66,8 @@ python -m qqbot_music serve      # 默认 http://127.0.0.1:8766，闲置 10 分�
 ```
 
 - **MaiBot**：装插件 [qqbot-music-maibot](https://github.com/aa1805370178-dot/qqbot-music-maibot)（插件市场或克隆到 `plugins/`）。
+- **AstrBot**：装插件 [astrbot_plugin_zeroshot_sing](https://github.com/aa1805370178-dot/astrbot_plugin_zeroshot_sing)。
+- **DeepSeek Harness（大肥鱼）**：`dsh plugin --profile web add dsh-zeroshot-sing`，见 [dsh-zeroshot-sing](https://github.com/aa1805370178-dot/dsh-zeroshot-sing)。
 - **其他框架**：调 HTTP 接口就行，接口说明也在 [adapters/README.md](adapters/README.md)。
 
 Windows 可以直接双击 `启动唱歌服务.bat`（先在里面填好 Python 路径）。
