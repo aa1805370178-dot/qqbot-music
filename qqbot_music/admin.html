@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>翻唱工作台</title>
+<style>
+:root {
+  --bg: #f6f5f2; --panel: #ffffff; --line: #e4e1da; --text: #22211f; --muted: #77736b;
+  --accent: #d2557a; --accent-soft: #fbe8ee; --ok: #2f8a5b; --ok-soft: #e3f3ea;
+  --warn: #b7791f; --warn-soft: #fbf0dc; --bad: #c0392b; --bad-soft: #fbe5e2;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161514; --panel: #201f1d; --line: #34322e; --text: #ece9e3; --muted: #9a958c;
+    --accent: #ee7b9c; --accent-soft: #3a2229; --ok: #5cc28c; --ok-soft: #1d3127;
+    --warn: #e3a64c; --warn-soft: #36291a; --bad: #ef7a6c; --bad-soft: #3a201d;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.55 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 6px 12px; }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.ghost { border-color: transparent; background: transparent; padding: 4px 8px; }
+button.danger:hover { border-color: var(--bad); color: var(--bad); }
+input, textarea, select { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 10px; outline: none; min-width: 0; }
+input:focus, textarea:focus { border-color: var(--accent); }
+a { color: var(--accent); }
+.hidden { display: none !important; }
+.wrap { max-width: 1100px; margin: 0 auto; padding: 20px 16px 120px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.grow { flex: 1; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+
+/* 登录 */
+#login { min-height: 100vh; display: grid; place-items: center; padding: 16px; }
+#login .card { width: 100%; max-width: 360px; text-align: center; }
+#login h1 { font-size: 20px; margin: 4px 0 4px; }
+#login input { width: 100%; margin: 16px 0 10px; text-align: center; font-size: 16px; }
+#login button { width: 100%; padding: 9px; }
+
+/* 顶栏 */
+header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+header h1 { font-size: 20px; margin: 0; }
+.pill { display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 3px 10px; font-size: 12px; background: var(--line); }
+.pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.pill.on { background: var(--ok-soft); color: var(--ok); }
+.pill.off { color: var(--muted); }
+.banner { background: var(--warn-soft); color: var(--warn); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 12px; }
+
+.tools { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.section-title { font-size: 15px; margin: 0 0 4px; }
+.cover { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; padding: 10px 4px; border-top: 1px solid var(--line); align-items: center; }
+.cover:first-of-type { border-top: none; }
+.tools h2, .settings h2 { font-size: 15px; margin: 0 0 10px; }
+.tools input[type=text] { flex: 1; }
+.learning { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.learning div { font-size: 13px; }
+.spin { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; vertical-align: -2px; margin-right: 6px; }
+@keyframes s { to { transform: rotate(360deg); } }
+
+/* 列表 */
+.filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.filters input { flex: 1; min-width: 180px; }
+.tab { border-radius: 999px; padding: 4px 12px; }
+.tab.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+.list { display: flex; flex-direction: column; }
+.song { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 14px; padding: 12px 4px; border-top: 1px solid var(--line); align-items: center; }
+.song:first-child { border-top: none; }
+.song > div { min-width: 0; }
+.song .t, .cover .t { font-weight: 600; overflow-wrap: anywhere; }
+.song .meta, .cover .meta { color: var(--muted); font-size: 12px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 2px; }
+.song .lyric { color: var(--muted); font-size: 12px; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.song .err, .cover .err { color: var(--bad); font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
+.song .acts, .cover .acts { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.tag { border-radius: 6px; padding: 0 6px; font-size: 11px; background: var(--line); color: var(--muted); }
+.tag.ready { background: var(--ok-soft); color: var(--ok); }
+.tag.failed { background: var(--bad-soft); color: var(--bad); }
+.tag.pending { background: var(--warn-soft); color: var(--warn); }
+.tag.manual { background: var(--accent-soft); color: var(--accent); }
+.empty { text-align: center; color: var(--muted); padding: 30px 0; }
+.more { text-align: center; margin-top: 10px; }
+
+/* 播放条 */
+#player { position: fixed; left: 0; right: 0; bottom: 0; background: var(--panel); border-top: 1px solid var(--line); padding: 10px 16px; }
+#player .in { max-width: 1100px; margin: 0 auto; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+#player audio { flex: 1; min-width: 240px; height: 36px; }
+#nowPlaying { font-size: 13px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 弹窗 */
+.mask { position: fixed; inset: 0; background: rgba(0,0,0,.35); display: grid; place-items: center; padding: 16px; z-index: 10; }
+.mask .card { width: 100%; max-width: 520px; max-height: 90vh; overflow: auto; }
+.field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+.field label { font-size: 12px; color: var(--muted); }
+.field textarea { min-height: 70px; resize: vertical; font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+.settings section + section { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+.hint { font-size: 12px; color: var(--muted); background: var(--bg); border-radius: 8px; padding: 8px 10px; margin: 6px 0 10px; }
+.hint ol { margin: 4px 0; padding-left: 18px; }
+.msg-ok { color: var(--ok); } .msg-bad { color: var(--bad); }
+
+#toast { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 16px; border-radius: 10px; font-size: 13px; z-index: 20; max-width: calc(100% - 32px); }
+
+@media (max-width: 720px) {
+  .stats { grid-template-columns: repeat(2, 1fr); }
+  .tools { grid-template-columns: 1fr; }
+  .cover { grid-template-columns: minmax(0, 1fr); }
+  .song { grid-template-columns: minmax(0, 1fr); }
+  .song .acts, .cover .acts { justify-content: flex-start; }
+}
+</style>
+</head>
+<body>
+
+<div id="login" class="hidden">
+  <form class="card" id="loginForm">
+    <h1>🎤 qqbot-music</h1>
+    <div class="muted small">翻唱工作台 · 输入密码登录</div>
+    <input type="password" id="pw" placeholder="密码" autocomplete="current-password" autofocus>
+    <button class="primary" type="submit">登录</button>
+    <div id="loginMsg" class="small msg-bad" style="margin-top:8px"></div>
+  </form>
+</div>
+
+<div id="app" class="hidden">
+  <div class="wrap">
+    <header>
+      <h1>🎤 翻唱工作台</h1>
+      <span id="svc" class="pill off">翻唱服务</span>
+      <span class="grow"></span>
+      <button id="btnSettings">⚙ 设置（音色 / B 站 cookie / 密码）</button>
+      <button class="ghost" id="btnLogout">退出</button>
+    </header>
+
+    <div id="bannerVoice" class="banner hidden">⚠ 还没设置音色：上传一段 10–25 秒、干净（没有伴奏和混响）的说话或清唱录音，翻唱就用这个音色。<button id="bannerVoiceBtn">去上传</button></div>
+    <div id="bannerPw" class="banner hidden">⚠ 还在用初始密码 123456，管理页里存着你的 B 站 cookie，先改个密码吧。<button id="bannerPwBtn">去改密码</button></div>
+    <div id="bannerCookie" class="banner hidden">⚠ 还没填 B 站 cookie：不填的话搜索常被风控，学不了新歌（导入本地音频不受影响）。<button id="bannerCookieBtn">去填</button></div>
+
+    <div class="stats">
+      <div class="stat"><b id="nReady">–</b><span>会唱</span></div>
+      <div class="stat"><b id="nLearning">–</b><span>正在学</span></div>
+      <div class="stat"><b id="nFailed">–</b><span>学失败</span></div>
+      <div class="stat"><b id="nSung">–</b><span>已唱过（有缓存）</span></div>
+    </div>
+
+    <form class="card" id="ttsForm" style="margin-bottom:14px">
+      <h2 class="section-title">🗣 先听听克隆出来的声音</h2>
+      <div class="small muted" style="margin-bottom:8px">用你上传的音色录音克隆说话的声音，打一段字让它念出来。像了再去唱歌。</div>
+      <div class="row">
+        <textarea id="ttsText" rows="2" style="flex:1 1 320px;min-height:44px;resize:vertical">你好呀，这是用我的录音克隆出来的声音，听听像不像？</textarea>
+        <button class="primary" type="submit" id="ttsBtn">念出来</button>
+      </div>
+      <div class="small" id="ttsMode" style="margin-top:8px"></div>
+    </form>
+
+    <div class="tools">
+      <form class="card" id="learnForm">
+        <h2>① 搜歌名，自动学</h2>
+        <div class="row">
+          <input type="text" id="lTitle" placeholder="歌名（必填）">
+          <input type="text" id="lArtist" placeholder="歌手（可选，同名歌多时填）">
+          <button class="primary" type="submit">学这首</button>
+        </div>
+        <div class="small muted" style="margin-top:8px">先去 QQ 音乐定原唱，再到 B 站找对得上的版本下载、分离、定副歌。学会以后在下面的曲库里试唱。一首大概几分钟到十几分钟，看显卡。</div>
+        <div class="learning" id="learningList"></div>
+      </form>
+      <form class="card" id="coverForm">
+        <h2>② 上传一首歌，整首翻唱</h2>
+        <div class="row">
+          <input type="file" id="cFile" accept="audio/*,.m4a,.flac,.mp3,.wav,.ogg" style="flex:1 1 100%">
+          <input type="text" id="cName" placeholder="名字（可选，默认用文件名）">
+          <button class="primary" type="submit">开始翻唱</button>
+        </div>
+        <div class="small muted" style="margin-top:8px">手里有歌的音频文件时用：分离人声 → 换成你的音色 → 混回伴奏，整首出来可以下载。不进曲库。4 分钟的歌在 4G 显卡上要十几分钟。</div>
+      </form>
+      <form class="card" id="uploadForm">
+        <h2>③ 本地音频放进曲库</h2>
+        <div class="row">
+          <input type="file" id="uFile" accept="audio/*,.m4a,.flac,.mp3,.wav,.ogg" style="flex:1 1 100%">
+          <input type="text" id="uTitle" placeholder="歌名（必填）">
+          <input type="text" id="uArtist" placeholder="歌手（可选）">
+          <button class="primary" type="submit">导入</button>
+        </div>
+        <div class="small muted" style="margin-top:8px">B 站找不到、或者想用自己的版本时用。进了曲库可以反复试唱副歌，接机器人时也能点这首。</div>
+      </form>
+    </div>
+
+    <div class="card hidden" id="coverCard" style="margin-bottom:14px">
+      <h2 class="section-title">整首翻唱</h2>
+      <div id="coverList"></div>
+    </div>
+
+    <div class="card">
+      <h2 class="section-title">曲库 <span class="muted small" style="font-weight:400">学会的歌，试唱默认唱副歌</span></h2>
+      <div class="filters">
+        <input type="search" id="q" placeholder="搜歌名、歌手、歌词">
+        <button class="tab on" data-f="all">全部</button>
+        <button class="tab" data-f="zh">华语</button>
+        <button class="tab" data-f="ja">日语</button>
+        <button class="tab" data-f="other">其他</button>
+        <button class="tab" data-f="failed">失败</button>
+        <select id="sort">
+          <option value="title">按歌名</option>
+          <option value="artist">按歌手</option>
+          <option value="sung">唱过的在前</option>
+        </select>
+      </div>
+      <div class="list" id="list"><div class="empty">加载中…</div></div>
+      <div class="more"><button id="btnMore" class="hidden">再显示 60 首</button></div>
+    </div>
+  </div>
+
+  <div id="player">
+    <div class="in">
+      <span id="nowPlaying" class="muted">点「原曲副歌」「试唱」或翻唱记录，在这里播放</span>
+      <a id="dl" class="hidden" download>⬇ 下载</a>
+      <audio id="audio" controls preload="none"></audio>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑 -->
+<div class="mask hidden" id="editBox">
+  <form class="card" id="editForm">
+    <h2 style="margin-top:0;font-size:16px">编辑</h2>
+    <div class="field"><label>歌名</label><input id="eTitle"></div>
+    <div class="field"><label>歌手</label><input id="eArtist"></div>
+    <div class="field">
+      <label>副歌起止（秒）· 全曲 <span id="eDur"></span> 秒 · 改了以后旧的试唱缓存会删掉</label>
+      <div class="row">
+        <input id="eStart" type="number" step="0.1" style="width:110px">
+        <button type="button" id="eFromStart" title="用播放条当前的位置">取播放位置</button>
+        <span class="muted">→</span>
+        <input id="eEnd" type="number" step="0.1" style="width:110px">
+        <button type="button" id="eFromEnd" title="用播放条当前的位置">取播放位置</button>
+      </div>
+      <div class="row" style="margin-top:8px"><button type="button" id="ePlay">▶ 听原曲这一段</button></div>
+    </div>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" id="eCancel">取消</button>
+      <button class="primary" type="submit">保存</button>
+    </div>
+  </form>
+</div>
+
+<!-- 设置 -->
+<div class="mask hidden" id="setBox">
+  <div class="card settings">
+    <section>
+      <h2>音色录音</h2>
+      <div id="voiceState" class="small"></div>
+      <audio id="voicePlayer" controls preload="none" class="hidden" style="width:100%;margin-top:8px;height:36px"></audio>
+      <div class="hint">
+        翻唱和说话克隆都用这段录音的音色。要求：
+        <ol>
+          <li>10–25 秒，只有一个人的声音，说话或清唱都行</li>
+          <li>干净：没有伴奏、没有混响、没有杂音（安静房间用手机录就可以）</li>
+          <li>mp3 / m4a / wav / flac 都行，超过 25 秒只用前 25 秒</li>
+        </ol>
+        用别人的声音前请先征得本人同意。换了以后旧的试唱缓存会清掉。
+      </div>
+      <div class="row">
+        <input type="file" id="voiceFile" accept="audio/*,.m4a,.flac,.mp3,.wav,.ogg" style="flex:1">
+        <button class="primary" id="voiceUpload">上传</button>
+      </div>
+      <div id="voiceMsg" class="small" style="margin-top:6px"></div>
+      <div class="field" style="margin-top:12px">
+        <label>录音里说的话（可选，说话克隆用）</label>
+        <textarea id="voiceText" placeholder="一字不差地写下录音里说了什么" style="font-family:inherit;font-size:13px"></textarea>
+      </div>
+      <div class="hint" id="voiceTextHint"></div>
+      <div class="row"><button id="voiceTextSave">保存文字</button><span id="voiceTextMsg" class="small"></span></div>
+    </section>
+    <section>
+      <h2>B 站 cookie（SESSDATA）</h2>
+      <div id="cookieState" class="small"></div>
+      <div class="hint">
+        学新歌要搜 B 站，未登录的搜索经常被风控。填你自己账号的 SESSDATA：
+        <ol>
+          <li>浏览器登录 bilibili.com</li>
+          <li>按 F12 → 「应用 / Application」→ Cookies → https://www.bilibili.com</li>
+          <li>找到 <b>SESSDATA</b>，复制它的值贴到下面（整串 cookie 贴进来也行，会自动挑出来）</li>
+        </ol>
+        只存在本机的 admin_store.json，不会上传到任何地方。这是你的登录凭证，别发给别人。
+      </div>
+      <div class="field"><textarea id="cookieIn" placeholder="贴 SESSDATA 的值"></textarea></div>
+      <div class="row">
+        <button class="primary" id="cookieSave">保存</button>
+        <button id="cookieCheck">检测是否有效</button>
+        <button class="danger" id="cookieClear">清除管理页里的</button>
+        <span id="cookieMsg" class="small"></span>
+      </div>
+    </section>
+    <section>
+      <h2>登录密码</h2>
+      <form id="pwForm">
+        <div class="field"><label>原密码</label><input type="password" id="pwOld" autocomplete="current-password"></div>
+        <div class="field"><label>新密码（至少 6 位）</label><input type="password" id="pwNew" autocomplete="new-password"></div>
+        <div class="field"><label>再输一次</label><input type="password" id="pwNew2" autocomplete="new-password"></div>
+        <div class="row"><button class="primary" type="submit">改密码</button><span id="pwMsg" class="small"></span></div>
+      </form>
+    </section>
+    <div class="row" style="justify-content:flex-end;margin-top:16px"><button id="setClose">关闭</button></div>
+  </div>
+</div>
+
+<div id="toast" class="hidden"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const LANG = { zh: "华语", ja: "日语", other: "其他" };
+const PAGE = 60;
+let songs = [], service = {}, filter = "all", shown = PAGE, singing = null, editing = null;
+let chorusStop = null, me = {};
+
+function h(tag, attrs = {}, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) el.append(k);
+  return el;
+}
+
+function toast(msg, ms = 2600) {
+  const t = $("#toast");
+  t.textContent = msg; t.classList.remove("hidden");
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.add("hidden"), ms);
+}
+
+async function api(path, body, opts = {}) {
+  const r = await fetch(path, body === undefined ? {} : {
+    method: "POST", headers: { "Content-Type": "application/json", "X-QM": "1", ...(opts.headers || {}) },
+    body: opts.raw ? body : JSON.stringify(body),
+  });
+  if (r.status === 401) { showLogin(); throw new Error("登录过期了"); }
+  if (opts.blob && r.ok) return r.blob();
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || `出错了（${r.status}）`);
+  return d;
+}
+
+const fmt = s => s == null ? "–" : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+
+/* ── 登录 ── */
+function showLogin() { $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); $("#pw").focus(); }
+async function boot() {
+  me = await api("/api/me");
+  if (!me.login) return showLogin();
+  $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
+  $("#bannerPw").classList.toggle("hidden", !me.default_password);
+  refresh(); loadCookie(); loadVoice();
+}
+$("#loginForm").onsubmit = async e => {
+  e.preventDefault();
+  try { await api("/api/login", { password: $("#pw").value }); $("#pw").value = ""; $("#loginMsg").textContent = ""; boot(); }
+  catch (ex) { $("#loginMsg").textContent = ex.message; }
+};
+$("#btnLogout").onclick = async () => { await api("/api/logout", {}); showLogin(); };
+
+/* ── 曲库 ── */
+let covers = [];
+const COVER_STATE = { queued: "排队中", separating: "分离人声中", converting: "换音色中", done: "做好了", failed: "失败" };
+function renderCovers() {
+  const box = $("#coverList");
+  $("#coverCard").classList.toggle("hidden", !covers.length);
+  box.replaceChildren(...covers.map(c => {
+    const busy = ["queued", "separating", "converting"].includes(c.status);
+    const url = `/api/audio?kind=cover&id=${encodeURIComponent(c.id)}`;
+    return h("div", { class: "cover" },
+      h("div", {},
+        h("div", { class: "t" }, c.name),
+        h("div", { class: "meta" },
+          h("span", { class: "tag " + (c.status === "done" ? "ready" : c.status === "failed" ? "failed" : "pending") },
+            busy ? [h("span", { class: "spin" }), COVER_STATE[c.status]] : COVER_STATE[c.status] || c.status),
+          c.duration && h("span", {}, "时长 " + fmt(c.duration)),
+          c.seconds && h("span", {}, `用时 ${Math.round(c.seconds / 60)} 分钟`),
+          h("span", {}, new Date(c.created * 1000).toLocaleString())),
+        c.error ? h("div", { class: "err" }, c.error) : null),
+      h("div", { class: "acts" },
+        c.status === "done" && h("button", { onclick: () => play(url + "&v=" + Date.now(), `翻唱 · ${c.name}`, null, null, `${c.name}.wav`) }, "▶ 播放"),
+        c.status === "done" && h("a", { href: url, download: `${c.name}.wav`, style: "padding:4px 8px" }, "下载"),
+        !busy && h("button", { class: "ghost danger", onclick: () => delCover(c) }, "删除")));
+  }));
+}
+async function delCover(c) {
+  if (!confirm(`删除翻唱《${c.name}》？`)) return;
+  try { await api("/api/cover/delete", { id: c.id }); refresh(); } catch (ex) { toast(ex.message, 5000); }
+}
+
+async function refresh() {
+  try {
+    const [d, cv] = await Promise.all([api("/api/songs"), api("/api/covers")]);
+    songs = d.songs; service = d.service; covers = cv.covers;
+  } catch (ex) { return; }
+  renderCovers();
+  const svc = $("#svc");
+  svc.className = "pill " + (service.alive ? "on" : "off");
+  svc.textContent = service.alive ? "翻唱服务运行中" : "翻唱服务没开（用到时自动启动）";
+  const failedLearn = Object.keys(service.failed || {});
+  $("#nReady").textContent = songs.filter(s => s.status === "ready").length;
+  $("#nLearning").textContent = (service.learning || []).length;
+  $("#nFailed").textContent = songs.filter(s => s.status === "failed").length + failedLearn.filter(t => !songs.some(s => s.title === t)).length;
+  $("#nSung").textContent = songs.filter(s => s.sung).length;
+  const box = $("#learningList"); box.replaceChildren();
+  for (const t of service.learning || []) box.append(h("div", {}, h("span", { class: "spin" }), `正在学《${t}》`));
+  for (const [t, err] of Object.entries(service.failed || {}))
+    if (!songs.some(s => s.title === t && s.status === "ready"))
+      box.append(h("div", { class: "msg-bad" }, `《${t}》没学会：${err || "原因不明"}`));
+  render();
+  clearTimeout(refresh.t);
+  const busy = (service.learning || []).length || covers.some(c => ["queued", "separating", "converting"].includes(c.status));
+  refresh.t = setTimeout(refresh, busy ? 5000 : 20000);
+}
+
+function visible() {
+  const q = $("#q").value.trim().toLowerCase();
+  let list = songs.filter(s => {
+    if (filter === "failed") { if (s.status !== "failed") return false; }
+    else if (filter !== "all" && (s.lang !== filter || s.status !== "ready")) return false;
+    if (!q) return true;
+    return [s.title, s.artist, ...(s.lyrics || [])].join(" ").toLowerCase().includes(q);
+  });
+  const key = $("#sort").value;
+  list.sort((a, b) => key === "sung" ? (b.sung - a.sung) || a.title.localeCompare(b.title, "zh")
+    : (a[key] || "").localeCompare(b[key] || "", "zh"));
+  return list;
+}
+
+function render() {
+  const list = visible(), box = $("#list");
+  box.replaceChildren();
+  if (!list.length) box.append(h("div", { class: "empty" }, songs.length ? "没有符合的歌" : "曲库还是空的，在上面学第一首吧"));
+  for (const s of list.slice(0, shown)) box.append(row(s));
+  $("#btnMore").classList.toggle("hidden", list.length <= shown);
+}
+
+function row(s) {
+  const status = { ready: "会唱", failed: "失败", pending: "学习中" }[s.status] || s.status;
+  const isSinging = singing === s.id;
+  const meta = h("div", { class: "meta" },
+    h("span", { class: "tag " + s.status }, status),
+    s.status === "ready" && h("span", { class: "tag" }, LANG[s.lang] || s.lang),
+    s.duration && h("span", {}, "全曲 " + fmt(s.duration)),
+    s.chorus && h("span", {}, `副歌 ${fmt(s.chorus[0])}–${fmt(s.chorus[1])}`),
+    s.chorus_by === "manual" && h("span", { class: "tag manual" }, "手动改过"),
+    s.chorus_by === "energy" && h("span", { class: "tag", title: "没拿到歌词，按响度找的" }, "按响度"),
+    s.source.startsWith("http") && h("a", { href: s.source, target: "_blank", rel: "noreferrer" }, "来源"));
+  const acts = h("div", { class: "acts" },
+    s.audio && s.chorus && h("button", { onclick: () => playChorus(s) }, "▶ 原曲副歌"),
+    s.status === "ready" && s.sung && h("button", { onclick: () => playSung(s) }, "▶ 听唱过的"),
+    s.status === "ready" && s.sung && h("a", { class: "ghost", href: audioUrl(s, "sung"), download: `${s.title}.wav`, title: "下载翻唱 WAV", style: "padding:4px 8px" }, "下载"),
+    s.status === "ready" && h("button", { class: s.sung ? "" : "primary", disabled: !!singing, onclick: () => sing(s) },
+      isSinging ? [h("span", { class: "spin" }), "正在唱…"] : s.sung ? "重新唱副歌" : "🎤 试唱副歌"),
+    s.status === "ready" && h("button", { onclick: () => coverSong(s), title: "整首换成你的音色，进度和结果在「整首翻唱」里" }, "整首翻唱"),
+    s.status === "failed" && h("button", { onclick: () => learn(s.title, s.artist) }, "再学一次"),
+    h("button", { class: "ghost", onclick: () => openEdit(s), title: "改歌名 / 歌手 / 副歌位置" }, "编辑"),
+    h("button", { class: "ghost danger", onclick: () => del(s) }, "删除"));
+  return h("div", { class: "song" },
+    h("div", {},
+      h("div", { class: "t" }, s.title, h("span", { class: "muted", style: "font-weight:400" }, s.artist ? "  ·  " + s.artist : "")),
+      meta,
+      s.lyrics.length ? h("div", { class: "lyric" }, s.lyrics.slice(0, 3).join(" / ")) : null,
+      s.error ? h("div", { class: "err" }, s.error) : null),
+    acts);
+}
+
+$("#q").oninput = () => { shown = PAGE; render(); };
+$("#sort").onchange = render;
+$("#btnMore").onclick = () => { shown += PAGE; render(); };
+document.querySelectorAll(".tab").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("on", x === b));
+  filter = b.dataset.f; shown = PAGE; render();
+});
+
+/* ── 播放 ── */
+const audio = $("#audio");
+function play(src, label, start, end, download) {
+  if (audio._blob) { URL.revokeObjectURL(audio._blob); audio._blob = null; }
+  const dl = $("#dl");
+  dl.classList.toggle("hidden", !download);
+  if (download) { dl.href = src; dl.download = download; }
+  chorusStop = end ?? null;
+  audio.src = src;
+  $("#nowPlaying").textContent = label; $("#nowPlaying").classList.remove("muted");
+  const go = () => { if (start) audio.currentTime = start; audio.play().catch(() => {}); };
+  audio.addEventListener("loadedmetadata", go, { once: true });
+  audio.load();
+}
+audio.addEventListener("timeupdate", () => { if (chorusStop != null && audio.currentTime >= chorusStop) { audio.pause(); chorusStop = null; } });
+audio.addEventListener("seeking", () => { if (chorusStop != null && audio.currentTime > chorusStop + 0.5) chorusStop = null; });
+const audioUrl = (s, kind = "orig") => `/api/audio?id=${encodeURIComponent(s.id)}&kind=${kind}&v=${Date.now()}`;
+function playChorus(s, a, b) {
+  const [x, y] = [a ?? s.chorus[0], b ?? s.chorus[1]];
+  play(audioUrl(s), `原曲副歌 · ${s.title}（${fmt(x)}–${fmt(y)}）`, x, y);
+}
+function playSung(s) { play(audioUrl(s, "sung"), `翻唱 · ${s.title}`, null, null, `${s.title}.wav`); }
+
+async function sing(s) {
+  singing = s.id; render();
+  toast(service.alive ? "开始唱，一般一两分钟" : "先启动唱歌服务、加载模型，第一次要多等一会儿", 4000);
+  try {
+    const blob = await api("/api/sing", { id: s.id }, { blob: true });
+    play(URL.createObjectURL(blob), `翻唱 · ${s.title}`, null, null, `${s.title}.wav`);
+    audio._blob = audio.src;
+    s.sung = true;
+  } catch (ex) { toast("唱失败了：" + ex.message, 5000); }
+  singing = null; refresh();
+}
+
+async function coverSong(s) {
+  const busy = covers.find(c => c.sid === s.id && ["queued", "separating", "converting"].includes(c.status));
+  if (busy) return toast(`《${s.title}》已经在做了`);
+  try {
+    await api("/api/cover/song", { id: s.id });
+    toast(`开始整首翻唱《${s.title}》，进度在上面的「整首翻唱」里`, 4000); refresh();
+  } catch (ex) { toast(ex.message, 5000); }
+}
+
+/* ── 说话克隆试听 ── */
+let voice = {};
+const MODE_TEXT = {
+  icl: ["msg-ok", "完整克隆：用了录音和录音里的文字，最像。"],
+  xvec: ["", "只用了音色特征。到「设置」里填上录音里说的话会更像。"],
+};
+function renderTtsMode() {
+  const m = $("#ttsMode");
+  if (!voice.tts) { m.className = "small msg-bad"; m.textContent = "没有说话克隆模型：重新双击 安装.bat 会补下（约 2.5 GB）。"; return; }
+  if (!voice.set) { m.className = "small msg-bad"; m.textContent = "先在「设置」里上传音色录音。"; return; }
+  const long = voice.text && voice.duration > voice.icl_max;
+  const [cls, text] = MODE_TEXT[voice.mode] || MODE_TEXT.xvec;
+  m.className = "small " + cls;
+  m.textContent = long ? `录音超过 ${voice.icl_max} 秒，只用了音色特征（剪短到 ${voice.icl_max} 秒内并填文字会更像）。` : text;
+}
+$("#ttsForm").onsubmit = async e => {
+  e.preventDefault();
+  const text = $("#ttsText").value.trim();
+  if (!text) return toast("先打一段字");
+  if (voice.max_chars && text.length > voice.max_chars) return toast(`一次最多 ${voice.max_chars} 个字`);
+  const btn = $("#ttsBtn");
+  btn.disabled = true; btn.replaceChildren(h("span", { class: "spin" }), "正在念…");
+  toast(service.alive ? "开始念，第一次要加载模型，半分钟左右" : "先启动服务、加载模型，第一次要多等一会儿", 4000);
+  try {
+    const blob = await api("/api/tts", { text }, { blob: true });
+    play(URL.createObjectURL(blob), `克隆试听 · ${text.slice(0, 20)}${text.length > 20 ? "…" : ""}`, null, null, "克隆试听.wav");
+    audio._blob = audio.src;
+  } catch (ex) { toast("没念出来：" + ex.message, 6000); }
+  btn.disabled = false; btn.textContent = "念出来";
+  refresh();
+};
+
+/* ── 学歌 / 导入 ── */
+async function learn(title, artist) {
+  try {
+    const d = await api("/api/learn", { title, artist });
+    toast(d.status === "ready" ? `《${title}》已经会唱了` : `开始学《${title}》，学会了会出现在列表里`);
+    refresh();
+  } catch (ex) { toast(ex.message, 5000); }
+}
+$("#learnForm").onsubmit = e => {
+  e.preventDefault();
+  const t = $("#lTitle").value.trim();
+  if (!t) return toast("要填歌名");
+  learn(t, $("#lArtist").value.trim());
+  $("#lTitle").value = ""; $("#lArtist").value = "";
+};
+$("#coverForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = $("#cFile").files[0];
+  if (!f) return toast("先选一首歌的音频文件");
+  toast("上传中…");
+  try {
+    await api("/api/cover", f, { raw: true, headers: {
+      "Content-Type": "application/octet-stream", "X-Filename": encodeURIComponent(f.name),
+      "X-Name": encodeURIComponent($("#cName").value.trim()) } });
+    toast("开始翻唱了，进度在「整首翻唱」里", 4000); e.target.reset(); refresh();
+  } catch (ex) { toast(ex.message, 5000); }
+};
+$("#uploadForm").onsubmit = async e => {
+  e.preventDefault();
+  const f = $("#uFile").files[0], t = $("#uTitle").value.trim();
+  if (!f || !t) return toast("要选文件、填歌名");
+  toast("上传中…");
+  try {
+    await api("/api/upload", f, { raw: true, headers: {
+      "Content-Type": "application/octet-stream", "X-Filename": encodeURIComponent(f.name),
+      "X-Title": encodeURIComponent(t), "X-Artist": encodeURIComponent($("#uArtist").value.trim()) } });
+    toast(`《${t}》导入了，正在分离`); e.target.reset(); refresh();
+  } catch (ex) { toast(ex.message, 5000); }
+};
+
+/* ── 编辑 / 删除 ── */
+function openEdit(s) {
+  editing = s;
+  $("#eTitle").value = s.title; $("#eArtist").value = s.artist;
+  $("#eStart").value = s.chorus ? s.chorus[0] : ""; $("#eEnd").value = s.chorus ? s.chorus[1] : "";
+  $("#eDur").textContent = s.duration ?? "–";
+  $("#editBox").classList.remove("hidden");
+}
+$("#eCancel").onclick = () => $("#editBox").classList.add("hidden");
+$("#eFromStart").onclick = () => $("#eStart").value = audio.currentTime.toFixed(1);
+$("#eFromEnd").onclick = () => $("#eEnd").value = audio.currentTime.toFixed(1);
+$("#ePlay").onclick = () => editing && playChorus(editing, +$("#eStart").value, +$("#eEnd").value);
+$("#editForm").onsubmit = async e => {
+  e.preventDefault();
+  const a = $("#eStart").value, b = $("#eEnd").value;
+  try {
+    await api("/api/edit", { id: editing.id, title: $("#eTitle").value, artist: $("#eArtist").value,
+      chorus: a !== "" && b !== "" ? [+a, +b] : null });
+    $("#editBox").classList.add("hidden"); toast("保存了"); refresh();
+  } catch (ex) { toast(ex.message, 5000); }
+};
+async function del(s) {
+  if (!confirm(`删除《${s.title}》？原曲、分离结果、唱过的缓存都会删掉，之后点这首要重新学。`)) return;
+  try { await api("/api/delete", { id: s.id }); toast("删了"); refresh(); }
+  catch (ex) { toast(ex.message, 5000); }
+}
+
+/* ── 设置 ── */
+async function loadCookie() {
+  const c = await api("/api/cookie");
+  const src = { admin: "管理页里填的", config: "config.toml 里填的" }[c.source];
+  $("#cookieState").replaceChildren(c.set
+    ? h("span", { class: "msg-ok" }, `已填写（${src}）：${c.masked}`)
+    : h("span", { class: "msg-bad" }, "还没填"));
+  $("#cookieClear").disabled = c.source !== "admin";
+  $("#bannerCookie").classList.toggle("hidden", c.set);
+}
+async function loadVoice() {
+  const v = voice = await api("/api/voice");
+  renderTtsMode();
+  if (document.activeElement !== $("#voiceText")) $("#voiceText").value = v.text || "";
+  $("#voiceTextHint").textContent = `填了以后说话克隆会把录音整段当上下文，声音、语气都更像；不填只用音色特征。`
+    + `录音要在 ${v.icl_max} 秒以内才用得上（太长塞不下）。只影响说话克隆，不影响唱歌。换录音时会清空。`;
+  $("#voiceState").replaceChildren(v.set
+    ? h("span", { class: "msg-ok" }, `已设置：${v.duration ?? "?"} 秒，${v.updated} 更新`)
+    : h("span", { class: "msg-bad" }, "还没设置"));
+  const p = $("#voicePlayer");
+  p.classList.toggle("hidden", !v.set);
+  if (v.set) p.src = `/api/audio?kind=voice&v=${Date.now()}`;
+  $("#bannerVoice").classList.toggle("hidden", v.set);
+}
+$("#voiceUpload").onclick = async () => {
+  const f = $("#voiceFile").files[0], m = $("#voiceMsg");
+  if (!f) { m.textContent = "先选一个音频文件"; m.className = "small msg-bad"; return; }
+  m.textContent = "上传、转换中…"; m.className = "small";
+  try {
+    const r = await api("/api/voice", f, { raw: true, headers: { "Content-Type": "application/octet-stream", "X-Filename": encodeURIComponent(f.name) } });
+    m.textContent = "换好了" + (r.note ? `（${r.note}）` : "") + "，可以试唱听听效果"; m.className = "small msg-ok";
+    $("#voiceFile").value = ""; loadVoice(); refresh();
+  } catch (ex) { m.textContent = ex.message; m.className = "small msg-bad"; }
+};
+$("#voiceTextSave").onclick = async () => {
+  const m = $("#voiceTextMsg");
+  try {
+    await api("/api/voice/text", { text: $("#voiceText").value });
+    m.textContent = $("#voiceText").value.trim() ? "存好了" : "清空了"; m.className = "small msg-ok";
+    $("#voiceText").blur(); loadVoice();
+  } catch (ex) { m.textContent = ex.message; m.className = "small msg-bad"; }
+};
+function openSettings() { $("#setBox").classList.remove("hidden"); $("#cookieMsg").textContent = ""; $("#pwMsg").textContent = ""; $("#voiceMsg").textContent = ""; loadCookie(); loadVoice(); }
+$("#bannerVoiceBtn").onclick = () => openSettings();
+$("#btnSettings").onclick = openSettings;
+$("#bannerPwBtn").onclick = () => { openSettings(); $("#pwOld").focus(); };
+$("#bannerCookieBtn").onclick = () => { openSettings(); $("#cookieIn").focus(); };
+$("#setClose").onclick = () => $("#setBox").classList.add("hidden");
+function cookieMsg(text, ok) { const m = $("#cookieMsg"); m.textContent = text; m.className = "small " + (ok ? "msg-ok" : "msg-bad"); }
+$("#cookieSave").onclick = async () => {
+  const v = $("#cookieIn").value.trim();
+  if (!v) return cookieMsg("先贴进来", false);
+  try {
+    await api("/api/cookie", { value: v }); $("#cookieIn").value = ""; await loadCookie();
+    const r = await api("/api/cookie/check", {}); cookieMsg("保存了；" + r.msg, r.ok);
+  } catch (ex) { cookieMsg(ex.message, false); }
+};
+$("#cookieCheck").onclick = async () => {
+  cookieMsg("检测中…", true);
+  try { const r = await api("/api/cookie/check", {}); cookieMsg(r.msg, r.ok); } catch (ex) { cookieMsg(ex.message, false); }
+};
+$("#cookieClear").onclick = async () => {
+  if (!confirm("清除管理页里存的 cookie？")) return;
+  await api("/api/cookie", { value: "" }); await loadCookie(); cookieMsg("清除了", true);
+};
+$("#pwForm").onsubmit = async e => {
+  e.preventDefault();
+  const m = $("#pwMsg");
+  if ($("#pwNew").value !== $("#pwNew2").value) { m.textContent = "两次新密码不一样"; m.className = "small msg-bad"; return; }
+  try {
+    await api("/api/password", { old: $("#pwOld").value, new: $("#pwNew").value });
+    e.target.reset(); m.textContent = "改好了"; m.className = "small msg-ok";
+    $("#bannerPw").classList.add("hidden");
+  } catch (ex) { m.textContent = ex.message; m.className = "small msg-bad"; }
+};
+document.addEventListener("keydown", e => { if (e.key === "Escape") document.querySelectorAll(".mask").forEach(m => m.classList.add("hidden")); });
+
+boot();
+</script>
+</body>
+</html>

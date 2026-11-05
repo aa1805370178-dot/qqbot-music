@@ -62,9 +62,26 @@ verify_original = true
 # 不填也能试，但未登录的搜索经常被风控、搜不到东西。这是你的登录凭证，别发给别人、别提交到仓库。
 bilibili_sessdata = ""
 
+[tts]
+# 说话克隆（Qwen3-TTS 0.6B Base）：用上面 [voice] 的录音克隆音色念一段字，先听听像不像。一键安装会下好模型。
+# 录音旁边放同名 .txt（管理页 → 设置里填「录音里说的话」）就是完整克隆，更像；不填只用音色特征。
+model = "models/Qwen3-TTS-12Hz-0.6B-Base"
+language = "Auto"        # Auto / Chinese / English / Japanese / Korean …
+icl_max_seconds = 20     # 录音比这长就只用音色特征（太长塞不进上下文，文字也难对齐）
+max_chars = 150          # 一次最多念多少字
+max_seq_len = 1024       # 生成上限（12 帧每秒，含参考音）；显存 4G 别加
+
 [service]
 host = "127.0.0.1"
 port = 8766
 idle_minutes = 10        # 闲置这么久自动退出，让出显存；0 = 不退出
 # 启动前结束监听这些端口的进程（比如同一张卡上的 TTS 服务），给换声腾显存。不需要就留空。
 free_ports = []
+
+[admin]
+# 管理页（python -m qqbot_music admin，或双击 启动管理页.bat）：看曲库、学新歌、试唱、删歌、填 B 站 cookie。
+# 默认只有本机能打开；改成 0.0.0.0 局域网里的手机也能打开（有登录密码，但 cookie 在里面，自己掂量）。
+host = "127.0.0.1"
+port = 8767
+# 登录密码（加盐哈希）和管理页里填的 B 站 cookie 存在这里，不进仓库。初始密码 123456，登录后请改掉。
+store = "admin_store.json"

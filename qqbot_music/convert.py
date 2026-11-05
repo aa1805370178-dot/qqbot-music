@@ -72,6 +72,21 @@ class Converter:
             pos += 30 * 16000 if pos == 0 else chunk.size(-1) - 16000 * 5
         return torch.cat(parts, dim=1)
 
+    def _f0(self, x16: torch.Tensor) -> np.ndarray:
+        """RMVPE 一次吃整首时显存随歌长涨（5 分钟的歌峰值 +1.5G）：按 30 秒一段算，每段两边多带 1 秒上下文再裁掉。
+        RMVPE 每 160 个采样一帧（center=True 末尾多一帧），拼回来和整首一次算的帧数一样。"""
+        n, seg, ctx, hop = x16.size(-1), 16000 * 30, 16000, 160
+        if n <= seg * 2:
+            return self.f0_fn(x16, thred=0.03)
+        parts = []
+        for a in range(0, n, seg):
+            b = min(a + seg, n)
+            lo, hi = max(0, a - ctx), min(n, b + ctx)
+            f = self.f0_fn(x16[lo:hi], thred=0.03)
+            s = (a - lo) // hop
+            parts.append(f[s:s + (b - a) // hop + (1 if b == n else 0)])
+        return np.concatenate(parts)
+
     @torch.no_grad()
     def __call__(self, vocal: np.ndarray) -> tuple[np.ndarray, list[dict]]:
         """返回 (换好的人声, 音高处理记录)。"""
@@ -80,11 +95,15 @@ class Converter:
         src16 = torchaudio.functional.resample(src, SR, 16000)
         s_alt = self._semantic(src16)
         mel = self.mel_fn(src.float())
-        f0, report = pitch.prepare(self.f0_fn(src16[0], thred=0.03), self.ref_hz, self.cfg.pitch)
+        f0, report = pitch.prepare(self._f0(src16[0]), self.ref_hz, self.cfg.pitch)
         f0 = torch.from_numpy(f0).float().to(self.device)[None]
         out = self.model.length_regulator(s_alt, ylens=torch.LongTensor([mel.size(2)]).to(self.device), n_quantizers=3,
                                           f0=f0, **self._style_kw())
         cond, style_cond = out[0], (out[-1] if self.style else None)
+        # 整首的中间结果用完就丢、缓存还给显卡：不然 4G 卡后面分块时会挤进共享内存，整首慢一倍多
+        del src, src16, s_alt, mel, f0, out
+        if self.device.type == "cuda":
+            torch.cuda.empty_cache()
 
         window = MAX_CONTEXT - self.mel2.size(2)
         overlap_wave = OVERLAP * HOP

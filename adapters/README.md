@@ -25,6 +25,10 @@ npm 包 [dsh-zeroshot-sing](https://github.com/aa1805370178-dot/dsh-zeroshot-sin
 | `GET /random?lang=zh&artist=歌手` | 从会唱的歌里随机挑一首（`lang` 可选 `zh` / `ja`，`artist` 可选），格式同 `/find` |
 | `POST /learn {"title", "artist"}` | 不会就在后台学，马上返回状态 |
 | `POST /sing {"id", "full": false}` | 返回 `audio/wav`（44.1k 立体声 16 位）。默认唱副歌，`full: true` 唱整首 |
+| `POST /add {"path", "title", "artist"}` | 导入服务所在机器上的音频文件，后台学（不联网下载），状态同 `/learn` |
+| `POST /cover {"path", "name"}` 或 `{"id"}` | 整首翻唱：本机音频文件（先分离）或曲库里会唱的歌（用已分离的音轨），后台做，返回 `{"id"}`，进度在曲库目录 `covers/<id>.json` |
+| `POST /tts {"text"}` | 用音色录音克隆的声音念这段字，返回 `audio/wav`，响应头 `X-TTS-Mode` 是 `icl`（用了录音文字）或 `xvec`（只用音色特征） |
+| `GET /learning` | 正在学和学失败的歌：`{"learning": [歌名], "failed": {歌名: 原因}}` |
 
 `status` 的取值：
 

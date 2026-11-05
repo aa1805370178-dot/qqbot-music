@@ -12,5 +12,9 @@ rotary_embedding_torch
 beartype
 hyper_connections
 einops>=0.8
+# 说话克隆（Qwen3-TTS）：transformers 要升到 4.57.3（Seed-VC 实测能用）。
+# qwen-tts 和 faster-qwen3-tts 请用 --no-deps 装，它们声明的依赖里有 gradio 等用不到的大包：
+#   pip install transformers==4.57.3 accelerate==1.12.0 onnxruntime
+#   pip install --no-deps qwen-tts==0.1.1 faster-qwen3-tts==0.3.1
 # 可选：[post] effects = true 时用
 # pedalboard

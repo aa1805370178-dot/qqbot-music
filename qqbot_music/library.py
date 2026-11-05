@@ -197,8 +197,8 @@ def _warmup() -> None:
     global _warm
     if not _warm:
         http.get("https://www.bilibili.com", headers=_BILI, timeout=10)  # 拿 buvid3，搜索接口要
-        from . import config
-        if sessdata := config.get().download.bilibili_sessdata.strip():  # 自己账号的登录 cookie，未登录搜索常被风控
+        from . import config, local_store
+        if sessdata := local_store.sessdata(config.get())[0]:  # 自己账号的登录 cookie，未登录搜索常被风控（管理页填的优先）
             http.cookies.set("SESSDATA", sessdata, domain=".bilibili.com", path="/")
         _warm = True
 

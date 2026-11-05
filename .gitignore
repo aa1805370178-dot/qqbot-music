@@ -4,3 +4,7 @@ third_party/
 voice/
 __pycache__/
 *.pyc
+admin_store.json
+*.tmp
+env/
+models/

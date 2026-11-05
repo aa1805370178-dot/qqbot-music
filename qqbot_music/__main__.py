@@ -1,6 +1,7 @@
 """命令行：python -m qqbot_music <命令>
 
   serve                         启动 HTTP 唱歌服务（给机器人调）
+  admin [--open]                启动管理页（曲库、学歌、试唱、B 站 cookie；初始密码 123456），--open 顺便打开浏览器
   learn 歌名 [歌手]              搜原唱版本、下载、整首分离、定副歌
   add 音频文件 歌名 [歌手]        导入本地音频（不联网下载）
   process                       把曲库里 pending 的都学完
@@ -34,6 +35,9 @@ def main(argv: list[str]) -> None:
     if cmd == "serve":
         from .service import serve
         serve(cfg)
+    elif cmd == "admin":
+        from .admin import serve as serve_admin
+        serve_admin(cfg, "--open" in args)
     elif cmd == "learn":
         try:
             print(lib.learn(args[0], args[1] if len(args) > 1 else ""))
