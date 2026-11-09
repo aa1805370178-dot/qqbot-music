@@ -203,33 +203,94 @@ def _warmup() -> None:
         _warm = True
 
 
+SAME_LENGTH = 10  # 和原曲差这么多秒以内算同一个音频版本：网易云歌词按这个配，B 站挑版本时也优先这种
+WBI_KEY_TTL = 1800  # wbi 密钥半小时内不变，缓存起来，不用每次搜索都先请求一次 /nav
+SEARCH_RETRY_WAITS = (1, 3)  # 被风控时隔几秒再试：最多试 3 次
+_wbi_cache: dict = {"key": "", "ts": 0.0}
+
+
+class BiliBlocked(LookupError):
+    """B 站搜索被风控拦了（不是没有这首歌）。是 LookupError，学歌那边照样当「这次学不成」处理，只是报的原因对。"""
+
+
+def _wbi_key() -> str:
+    if not _wbi_cache["key"] or time.time() - _wbi_cache["ts"] > WBI_KEY_TTL:
+        img = http.get("https://api.bilibili.com/x/web-interface/nav", headers=_BILI, timeout=10).json()["data"]["wbi_img"]
+        raw = "".join(u.rsplit("/", 1)[-1].split(".")[0] for u in (img["img_url"], img["sub_url"]))
+        _wbi_cache.update(key="".join(raw[i] for i in _MIXIN if i < len(raw))[:32], ts=time.time())
+    return _wbi_cache["key"]
+
+
 def _wbi(params: dict) -> dict:
     """B 站新版接口的 wbi 签名（/nav 未登录也会给 wbi_img）。"""
     _warmup()
-    img = http.get("https://api.bilibili.com/x/web-interface/nav", headers=_BILI, timeout=10).json()["data"]["wbi_img"]
-    raw = "".join(u.rsplit("/", 1)[-1].split(".")[0] for u in (img["img_url"], img["sub_url"]))
-    key = "".join(raw[i] for i in _MIXIN if i < len(raw))[:32]
+    key = _wbi_key()
     p = {**params, "wts": int(time.time())}
     qs = urlencode({k: re.sub(r"[!'()*]", "", str(v)) for k, v in sorted(p.items())})
     p["w_rid"] = hashlib.md5((qs + key).encode()).hexdigest()
     return p
 
 
+_SEARCH_PAGE = {"Origin": "https://search.bilibili.com", "Referer": "https://search.bilibili.com/"}
+
+
+def _search_once(keyword: str, page: int) -> tuple[list[dict] | None, str]:
+    """搜一页视频，B 站默认的综合排序。返回 (结果, 风控信号)；几个接口都被拦时结果是 None。
+    先走综合搜索 all/v2（网页搜索页「综合」那一栏用的接口），从里面取视频那一块：11-09 实测同一时段 search/type 9 次被拦 5 次，
+    all/v2 9 次全过（照 Agent-Reach #180 的做法）；它拿不到视频再退回 search/type 新版、旧版。
+    风控有几种样子：HTTP 412、回的是网页不是 JSON、code=0 但 data 里只有 v_voucher（最常见，随机出现）。"""
+    signal = ""
+    typed = {"search_type": "video", "keyword": keyword, "page": page, "page_size": 20}
+    for url, params, signed, headers in (
+            ("https://api.bilibili.com/x/web-interface/wbi/search/all/v2", {"keyword": keyword, "page": page}, True, _SEARCH_PAGE),
+            ("https://api.bilibili.com/x/web-interface/wbi/search/type", typed, True, _BILI),
+            ("https://api.bilibili.com/x/web-interface/search/type", typed, False, _BILI)):
+        try:
+            r = http.get(url, headers=headers, params=_wbi(params) if signed else params, timeout=15)
+            if r.status_code == 412:
+                signal = "412"
+                continue
+            j = r.json()
+        except (requests.RequestException, ValueError, KeyError) as ex:  # KeyError：/nav 没给 wbi_img
+            signal = type(ex).__name__
+            continue
+        data = j.get("data") or {}
+        if j.get("code") != 0:
+            signal = f"code={j.get('code')}"
+            if signed:
+                _wbi_cache["key"] = ""  # 可能是密钥过期了，下次重新拿
+            continue
+        if "v_voucher" in data and not data.get("result"):
+            signal = "v_voucher"
+            continue
+        result = data.get("result") or []
+        if "/all/" in url:  # 综合搜索的结果按类型分块（视频、番剧、用户……）
+            videos = next((b.get("data") or [] for b in result if b.get("result_type") == "video"), [])
+            if videos:
+                return videos, ""
+            signal = signal or "all/v2 没有视频"  # 可能真没有，也可能被拦；让 search/type 再确认一次
+            continue
+        return result, ""
+    return None, signal
+
+
 def search_bilibili(keyword: str, pages: int = 2) -> list[dict]:
-    """先新版 wbi 接口，拿不到再试旧版。未登录时常被风控（只回 v_voucher 或 412），配置里填 bilibili_sessdata 最稳。"""
+    """搜视频，B 站默认的综合排序。被风控就隔几秒重试；第一页重试完还被拦抛 BiliBlocked，后面的页被拦就用已经拿到的。
+    未登录时风控更多，配置里填 bilibili_sessdata 最稳。"""
     _warmup()
     out = []
     for page in range(1, pages + 1):
-        params = {"search_type": "video", "keyword": keyword, "page": page, "page_size": 20, "order": "click"}
-        batch = []
-        for url, p in (("https://api.bilibili.com/x/web-interface/wbi/search/type", _wbi(params)),
-                       ("https://api.bilibili.com/x/web-interface/search/type", params)):
-            try:
-                batch = (http.get(url, headers=_BILI, params=p, timeout=15).json().get("data") or {}).get("result") or []
-            except ValueError:  # 被限流时回的是网页不是 JSON
-                batch = []
-            if batch:
+        # 不传 order 就是 B 站默认的综合排序（和网页上搜出来的顺序一样）；按播放量排会让梗视频、二创排到原版前面
+        batch, signal = _search_once(keyword, page)
+        for wait in SEARCH_RETRY_WAITS:
+            if batch is not None:
                 break
+            time.sleep(wait)
+            batch, signal = _search_once(keyword, page)
+        if batch is None:
+            if page == 1:
+                raise BiliBlocked(f"B 站搜索没拿到结果（{signal}，多半是被风控了），过一会儿再点")
+            break
         out += batch
         if not batch:
             break
@@ -238,25 +299,31 @@ def search_bilibili(keyword: str, pages: int = 2) -> list[dict]:
 
 
 def pick_bilibili(title: str, artist: str = "", verify: bool = True) -> tuple[dict, str] | None:
-    """B 站挑原唱版本：标题含歌名、不含排除词，播放量最高。
-    verify 时先去 QQ 音乐定原唱：标题或 UP 主要带原唱歌手名、时长和原曲差 15 秒内（光看标题会挑到标题带歌名的搞笑视频）；
-    QQ 音乐没有的歌才退回 2–7 分钟。返回 (视频, 歌手)。"""
+    """B 站挑原唱版本：按综合排序，第一个标题含歌名、不含排除词的。
+    verify 时先去 QQ 音乐定原唱：标题或 UP 主要带原唱歌手名、时长比原曲短不超过 15 秒、长不超过 25 秒
+    （MV 有片头片尾，常比原曲长 18–20 秒）；QQ 音乐没有的歌才退回 2–7 分钟。
+    和原曲差 SAME_LENGTH 秒以内的（音频版）优先：MV 超出网易云歌词的时长容差、时间轴也被片头错开，
+    副歌只能按响度猜；一个都没有才用 MV。
+    标题里的 #话题 不算（二创视频常打 #歌名 #歌手 蹭搜索）。返回 (视频, 歌手)。"""
     original = original_version(title, artist) if verify else None
     singers = original[0] if original else ([artist] if artist else [])
-    best = None
+    fallback = None
     for v in search_bilibili(f"{title} {singers[0] if singers else ''}".strip()):
         name = re.sub(r"<[^>]+>", "", v.get("title", ""))
+        name = re.sub(r"#[^#\s]*#?", "", name)  # 去掉 #话题 和 #话题#
         mm, _, ss = str(v.get("duration", "0:0")).partition(":")
         secs = int(mm or 0) * 60 + int(ss or 0)
         if norm(title) not in norm(name) or any(w in name.lower() for w in BAD_WORDS):
             continue
-        if original and abs(secs - original[1]) > 15 or not original and not 120 <= secs <= 420:
+        if original and not -15 <= secs - original[1] <= 25 or not original and not 120 <= secs <= 420:
             continue
         if singers and not any(norm(x) in norm(name + v.get("author", "")) for x in singers):
             continue
-        if best is None or v.get("play", 0) > best[0].get("play", 0):
-            best = (v, "、".join(singers) or v.get("author", ""))
-    return best
+        got = (v, "、".join(singers) or v.get("author", ""))
+        if not original or abs(secs - original[1]) <= SAME_LENGTH:
+            return got
+        fallback = fallback or got
+    return fallback
 
 
 def download_bilibili(url: str, out: str) -> str:
@@ -290,7 +357,7 @@ def netease_lrc(title: str, artist: str, duration: float) -> list[tuple[float, s
     except (requests.RequestException, ValueError):
         return []
     songs = [s for s in (r.get("result") or {}).get("songs", []) or []
-             if "live" not in s["name"].lower() and abs(s["duration"] / 1000 - duration) <= 10]
+             if "live" not in s["name"].lower() and abs(s["duration"] / 1000 - duration) <= SAME_LENGTH]
     a = norm(artist)
     songs.sort(key=lambda s: (not a or not any(norm(x["name"]) and (norm(x["name"]) in a or a in norm(x["name"])) for x in s["artists"]),
                               abs(s["duration"] / 1000 - duration)))

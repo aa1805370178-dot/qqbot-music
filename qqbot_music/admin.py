@@ -68,7 +68,9 @@ class SingService:
         logf = open(os.path.join(self.cfg.library.dir, "service_log.txt"), "ab")
         flags = 0
         if os.name == "nt":
-            flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+            # 不能加 DETACHED_PROCESS：venv 的 python.exe 是个转发器，它没控制台时，真正的 python 会自己开一个黑窗口挡在页面上。
+            # CREATE_NO_WINDOW 给一个隐藏的控制台，转发出去的进程也继承它；关掉管理页窗口不影响服务。
+            flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
         subprocess.Popen([sys.executable, "-m", "qqbot_music", "serve"], cwd=config.ROOT, stdout=logf, stderr=logf,
                          env={**os.environ, "PYTHONUTF8": "1"}, creationflags=flags)
         log("唱歌服务没开，已拉起")
