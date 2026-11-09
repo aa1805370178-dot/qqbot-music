@@ -1,0 +1,3 @@
+# cmd needs CRLF in .bat files (GitHub ZIP downloads keep the repo's line endings otherwise)
+*.bat text eol=crlf
+*.cmd text eol=crlf

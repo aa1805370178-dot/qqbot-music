@@ -1,8 +1,9 @@
 @echo off
 chcp 65001 >nul
-rem 双击安装：检测电脑环境 → 在本文件夹的 env\ 里装独立的 Python 和依赖 → 下载模型 → 自检 → 打开管理页。
-rem 可以重复双击：装好的部分会跳过，中断了接着装。不改动电脑上已有的 Python / conda / CUDA。
-cd /d %~dp0
+rem One-click install: check PC -> local Python in env\ -> download models -> self-test -> open the admin page.
+rem Safe to run again: finished steps are skipped. Does not touch your existing Python / conda / CUDA.
+rem Keep this file ASCII-only: cmd mis-reads lines of UTF-8 Chinese text in .bat files after chcp.
+cd /d "%~dp0"
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install\install.ps1" %*
 echo.
 pause

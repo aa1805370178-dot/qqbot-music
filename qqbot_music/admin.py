@@ -562,6 +562,8 @@ def serve(cfg, open_browser: bool = False) -> None:
     log(f"管理页：{url}  （初始密码 {local_store.DEFAULT_PASSWORD}，登录后请改掉）" if local_store.is_default_password(cfg)
         else f"管理页：{url}")
     log(f"曲库：{cfg.library.dir}")
+    if open_browser:
+        log("会自动打开浏览器；关掉这个窗口管理页就停了（唱歌服务不受影响）")
     _no_quick_edit()
     if open_browser:  # 放后台线程：有的环境里打开浏览器会卡住，不能挡住服务启动
         threading.Thread(target=webbrowser.open, args=(url,), daemon=True).start()
