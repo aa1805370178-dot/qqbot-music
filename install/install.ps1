@@ -141,7 +141,17 @@ if ($gpu) {
     $name, $mem, $drv = $gpu.Split(',') | ForEach-Object { $_.Trim() }
     Say "  显卡：$name，显存 $mem MB，驱动 $drv"
     $drvVer = [version]($drv + '.0')
-    if ($drvVer -ge [version]'528.33') { $torchTag = 'cu124' }
+    # 算力（老驱动不支持这个字段，查不到就当不是 50 系）
+    $cap = (& $smi --query-gpu=compute_cap --format=csv,noheader 2>$null | Select-Object -First 1)
+    $capMajor = 0
+    if ("$cap" -match '^\s*(\d+)\.') { $capMajor = [int]$Matches[1] }
+    if ($capMajor -ge 12) {
+        # RTX 50 系（Blackwell，sm_120）：torch 2.6 没有这代显卡的 GPU 代码，会报 no kernel image，要 2.7 + CUDA 12.8
+        $TorchVersion = '2.7.1'; $torchTag = 'cu128'
+        Say "  50 系显卡（算力 $cap），用 PyTorch 2.7.1 + CUDA 12.8"
+        if ($drvVer -lt [version]'570.65') { Warn '50 系显卡要 570.65 以上的驱动，请先到 NVIDIA 官网或 NVIDIA App 更新驱动' }
+    }
+    elseif ($drvVer -ge [version]'528.33') { $torchTag = 'cu124' }
     elseif ($drvVer -ge [version]'452.39') { $torchTag = 'cu118'; Warn '显卡驱动比较旧，用 CUDA 11.8 版本；更新驱动后速度可能更好' }
     else {
         Warn '显卡驱动太旧（低于 452），用不了 GPU。请到 NVIDIA 官网或 NVIDIA App 更新驱动后重新安装。'
@@ -245,6 +255,14 @@ if ($have -eq "$TorchVersion+$torchTag") { Say "  已有 $have，跳过" } else 
 }
 $cudaOk = & $Py -c "import torch; print(torch.cuda.is_available())" 2>$null
 if ($torchTag -ne 'cpu' -and $cudaOk -ne 'True') { Warn 'PyTorch 装好了但用不了显卡，先按 CPU 继续；更新显卡驱动后重新安装试试' }
+if ($cudaOk -eq 'True') {
+    # is_available 只说明认得显卡，不代表这版 PyTorch 带了这代显卡的代码（50 系配 torch 2.6 就是这样），真跑一次 LSTM 试试
+    $gpuRun = & $Py -c "import torch; m=torch.nn.LSTM(4,4).cuda(); m(torch.zeros(2,1,4,device='cuda')); torch.cuda.synchronize(); print('OK')" 2>&1 | Out-String
+    if ($gpuRun -notmatch 'OK') {
+        Write-Host $gpuRun
+        Fail "PyTorch $TorchVersion+$torchTag 在这块显卡上跑不起来（$name）。把上面的报错和 env\install_log.txt 发 issue"
+    }
+}
 
 # ─────────────────────────────────────────────
 Step 5 '下载 Seed-VC、YingMusic-SVC 代码（固定版本）'
@@ -287,6 +305,8 @@ Step 6 '安装其余依赖（固定版本）'
 $running = Get-Process python, pythonw -ErrorAction SilentlyContinue | Where-Object { $_.Path -and $_.Path.StartsWith((Join-Path $Root 'env'), [StringComparison]::OrdinalIgnoreCase) }
 if ($running) { Say '  先关掉正在运行的管理页 / 翻唱服务'; $running | Stop-Process -Force; Start-Sleep -Seconds 2 }
 if (-not (Uv-Pip @('--no-deps', '-r', (Join-Path $PSScriptRoot 'requirements-lock.txt')))) { Fail '依赖安装失败' }
+# 锁文件里的 sympy 1.13.1 是 torch 2.6 要的；50 系用的 torch 2.7.1 要 1.13.3 以上，--no-deps 不会帮忙改，这里换掉
+if ($TorchVersion -ne '2.6.0' -and -not (Uv-Pip @('sympy==1.14.0'))) { Fail '依赖安装失败（sympy）' }
 Say '  好了' 'Green'
 
 # ─────────────────────────────────────────────

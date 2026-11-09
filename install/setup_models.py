@@ -6,6 +6,7 @@
 2. 换声要的 9 个文件（Seed-VC、Whisper、BigVGAN、RMVPE、CAMPPlus）：也从 ModelScope 下，
    按 sha256 核对过和 Hugging Face 官方的是同一个文件，直接放进 Seed-VC 找模型的 Hugging Face 缓存目录结构里。
    ModelScope 不通才去 huggingface.co 下（要能连上，一般得开代理）。hf-mirror.com 现在会把模型请求跳回 huggingface.co，不用它。
+   选了 YingMusic 的话，它要的 Whisper、BigVGAN、RMVPE、CAMPPlus 和 Seed-VC 是同一批文件，硬链接到 YingMusic-SVC/checkpoints（不另占空间）。
 3. 说话克隆模型 Qwen3-TTS 0.6B Base：ModelScope 官方仓库，同样逐个校验 sha256，放在 models/。
 4. 离线加载一遍换声模型、说话克隆念一句、分离器分离 3 秒静音，确认显卡和环境都能跑。
 5. 全部通过写 env/install_ok.json，启动脚本看到它就开离线模式（不再联网检查模型）。
@@ -16,6 +17,7 @@
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -169,6 +171,30 @@ def download(urls: list[str], out: str, expect_sha: str = "") -> None:
     raise RuntimeError(f"{os.path.basename(out)} 下载失败。网络不好可以挂代理后重新双击 安装.bat（会接着下）")
 
 
+def ying_shared_models() -> None:
+    """YingMusic 在自己目录的 ./checkpoints（hf_hub_download）和 ./checkpoints/hf_cache（from_pretrained）找
+    RMVPE、CAMPPlus、BigVGAN、Whisper-small，和 Seed-VC 是同一个仓库同一个版本，按同样的结构硬链接过去。"""
+    for cache, repo, commit, name, *_ in SEEDVC_FILES:
+        if repo == "Plachta/Seed-VC":  # Seed-VC 自己的 DiT，YingMusic 不用
+            continue
+        rel = os.path.join(cache, "models--" + repo.replace("/", "--"))
+        src = os.path.join(SEEDVC, rel, "snapshots", commit, name)
+        base = os.path.join(YING, rel)
+        dst = os.path.join(base, "snapshots", commit, name)
+        if not (os.path.exists(dst) and os.path.getsize(dst) == os.path.getsize(src)):
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            if os.path.exists(dst):
+                os.remove(dst)
+            try:
+                os.link(src, dst)
+            except OSError:  # 跨盘或文件系统不支持硬链接
+                shutil.copy2(src, dst)
+        os.makedirs(os.path.join(base, "refs"), exist_ok=True)
+        with open(os.path.join(base, "refs", "main"), "w") as f:
+            f.write(commit)
+    say("  YingMusic 共用的 Whisper / BigVGAN / RMVPE / CAMPPlus 已放好")
+
+
 def separator_ckpt(name: str) -> None:
     out = os.path.join(YING, "ckpt", name)
     download([f"https://modelscope.cn/models/{MS_REPO}/resolve/master/{name}",
@@ -197,6 +223,17 @@ from qqbot_music.separate import Separator
 cfg = config.load()
 v, i = Separator(cfg)(np.zeros((2, 44100 * 3), dtype='float32'))
 print('  分离 3 秒静音成功')
+"""
+
+
+YING_CHECK = """
+import torch
+from qqbot_music import config
+from qqbot_music.convert import _load_yingmusic
+cfg = config.load()
+cfg.convert.backend = 'yingmusic'
+_load_yingmusic(cfg, torch.device('cuda' if torch.cuda.is_available() else 'cpu'))
+print('  YingMusic 换声模型加载成功')
 """
 
 
@@ -233,6 +270,10 @@ def main() -> None:
     seedvc_models()
     if not run_check("离线加载换声模型", SEEDVC_CHECK, SEEDVC, {"HF_HUB_OFFLINE": "1"}):
         raise RuntimeError("换声模型加载失败。把上面的报错发 issue")
+    if with_ying:
+        ying_shared_models()
+        if not run_check("离线加载 YingMusic 换声模型", YING_CHECK, ROOT, {"HF_HUB_OFFLINE": "1"}):
+            raise RuntimeError("YingMusic 换声模型加载失败。把上面的报错发 issue")
 
     say("\n[模型 3/4] 说话克隆模型 Qwen3-TTS 0.6B（约 2.5G，ModelScope）")
     tts_models()

@@ -37,6 +37,7 @@ class Converter:
             (self.model, self.semantic_fn, self.f0_fn, self.vocoder_fn, self.campplus, self.mel_fn, _) = _load_seedvc(cfg)
         else:
             raise ValueError(f"[convert] backend 只能是 seedvc 或 yingmusic，现在是 {c.backend!r}")
+        self.semantic_no_cudnn = False
         self.set_reference(cfg.voice.reference)
 
     @torch.no_grad()
@@ -52,7 +53,7 @@ class Converter:
         self.style2 = self.campplus((feat - feat.mean(dim=0, keepdim=True)).unsqueeze(0))
         f0_ref = self.f0_fn(ref16[0], thred=0.03)
         self.ref_hz = pitch.median_hz(f0_ref)
-        out = self.model.length_regulator(self.semantic_fn(ref16), ylens=torch.LongTensor([self.mel2.size(2)]).to(self.device),
+        out = self.model.length_regulator(self._whisper(ref16), ylens=torch.LongTensor([self.mel2.size(2)]).to(self.device),
                                           n_quantizers=3, f0=torch.from_numpy(f0_ref).to(self.device)[None], **self._style_kw())
         self.prompt = out[0]
         self.style_prompt = out[-1] if self.style else None
@@ -60,13 +61,25 @@ class Converter:
     def _style_kw(self) -> dict:
         return {"style": self.style2, "return_style_residual": True} if self.style else {}
 
+    def _whisper(self, x16: torch.Tensor) -> torch.Tensor:
+        """Whisper 编码器（半精度）。torch 2.7.1 自带的 cuDNN 9.7 在 GTX 1650 Ti 上半精度 Conv1d 会整段出 NaN（2.6 的 cuDNN 9.1 正常），
+        换出来是满幅噪音；别的显卡没法逐个验证，所以第一次（算参考音时）发现 NaN 就换成不用 cuDNN 重算，之后一直这样。"""
+        if not self.semantic_no_cudnn:
+            s = self.semantic_fn(x16)
+            if not torch.isnan(s).any():
+                return s
+            print("[convert] 这块显卡上 Whisper 用 cuDNN 算出 NaN，改成不用 cuDNN 算（只影响 Whisper 这一步）", flush=True)
+            self.semantic_no_cudnn = True
+        with torch.backends.cudnn.flags(enabled=False):
+            return self.semantic_fn(x16)
+
     def _semantic(self, src16: torch.Tensor) -> torch.Tensor:
         if src16.size(-1) <= 16000 * 30:
-            return self.semantic_fn(src16)
+            return self._whisper(src16)
         parts, buf, pos = [], None, 0  # Whisper 一次最多 30 秒：重叠 5 秒分段
         while pos < src16.size(-1):
             chunk = src16[:, pos:pos + 16000 * 30] if buf is None else torch.cat([buf, src16[:, pos:pos + 16000 * 25]], dim=-1)
-            s = self.semantic_fn(chunk)
+            s = self._whisper(chunk)
             parts.append(s if pos == 0 else s[:, 50 * 5:])
             buf = chunk[:, -16000 * 5:]
             pos += 30 * 16000 if pos == 0 else chunk.size(-1) - 16000 * 5

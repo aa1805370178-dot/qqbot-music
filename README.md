@@ -8,6 +8,8 @@
 - **全本地**：模型和曲库都在你自己电脑上，4G 显存的笔记本卡（GTX 1650 Ti）也能跑，就是慢点。
 - **可选：接 QQ 机器人**：工作台背后是一个本地 HTTP 服务，装个插件，机器人就能在群里自己学歌、唱歌（MaiBot、AstrBot、DeepSeek Harness 大肥鱼）。不接机器人也能单独用。
 
+> **0.2.2**：支持 RTX 50 系显卡（原来装的 PyTorch 2.6 不带 50 系的 GPU 代码，会报 `no kernel image is available`；现在自动改装 PyTorch 2.7.1 + CUDA 12.8，要 570 以上的驱动）。装完 PyTorch 会真的在显卡上跑一次，跑不起来直接报出来，不再拖到最后一步。换声防一个 cuDNN 的坑：部分显卡上 Whisper 半精度会算出 NaN（换出来全是噪音），发现了自动改用不带 cuDNN 的算法。带 YingMusic 安装时补上它要的 Whisper / BigVGAN / RMVPE / CAMPPlus（原来只下了 YingMusic 模型本身，离线时加载不了）。已经装好的按下面「更新」重新双击 `安装.bat` 即可，机器人插件不用更新。
+>
 > **0.2.1**：学歌挑 B 站版本更准、更少被风控——搜索改走综合搜索 all/v2（风控少很多，拿不到再退回 search/type），按 B 站默认综合排序挑第一个对得上的（原来按播放量会挑到梗视频、二创），标题里的 `#话题` 不算，和原曲时长一致的音频版优先于 MV（MV 配不上歌词、副歌位置会错）；被风控时自动重试，还不行就报「被风控了，过会儿再点」而不是「没找到」；wbi 密钥缓存半小时。管理页拉起服务时不再弹黑窗口。机器人插件不用更新。
 >
 > **0.2.0**：新增翻唱工作台（浏览器管理页，密码保护，存 B 站 cookie）、Windows 一键安装（`安装.bat`）、说话克隆试听（Qwen3-TTS，和换声共用一个环境）、曲库歌曲整首翻唱；修了 4G 显存整首翻唱比副歌慢一倍多的问题（音高分段算、预处理后释放显存）。机器人插件接口没变，不用更新插件。
@@ -45,9 +47,11 @@
 
 以后双击 `启动管理页.bat`（或桌面快捷方式）就能打开。
 
+**更新到新版本**：先关掉管理页，下载新版 ZIP，解压后把里面的文件**覆盖**到原来的文件夹，再双击 `安装.bat`。装好的部分会跳过，只补新版需要的东西；你的配置、曲库、音色录音、密码都不在 ZIP 里，不会被覆盖。
+
 安装脚本会做这些事：
 
-- **先检查电脑**：Windows 10/11 64 位、磁盘空间（约需 15 GB）、显卡型号 / 显存 / 驱动版本（按驱动选 CUDA 12.4 或 11.8 版的 PyTorch；没有 NVIDIA 显卡会提示只能用很慢的 CPU 版）、安装路径有没有中文和空格
+- **先检查电脑**：Windows 10/11 64 位、磁盘空间（约需 15 GB）、显卡型号 / 显存 / 驱动版本（按显卡和驱动选 PyTorch：RTX 50 系用 2.7.1 + CUDA 12.8，其他用 2.6.0 + CUDA 12.4 或 11.8；没有 NVIDIA 显卡会提示只能用很慢的 CPU 版）、安装路径有没有中文和空格
 - **全部装进这个文件夹**：独立的 Python 3.10 和依赖装在 `env\`，Seed-VC / YingMusic-SVC 代码和模型在 `third_party\`。**不改动你电脑上已有的 Python、conda、CUDA**，不写注册表、不改 PATH；卸载就是删掉整个文件夹
 - **国内直连**：Python 走 npmmirror，PyTorch 走阿里云镜像，其余依赖走清华 PyPI，模型全部走 ModelScope（和 Hugging Face 官方文件逐个核对过 sha256）；依赖版本锁定成作者机器上跑通的那一套（`install/requirements-lock.txt`）
 - **换声和说话克隆共用一个环境**：Qwen3-TTS 要 transformers 4.57.3，Seed-VC 原本锁 4.46.3，但它只用 Whisper 编码器，实测换版本前后同一段歌换出来几乎一样（相关系数 0.999，只差半精度舍入），所以统一用 4.57.3，不用装两套
@@ -97,7 +101,8 @@ git clone https://github.com/Plachtaa/seed-vc third_party/seed-vc
 # 2. 分离器（也是 YingMusic 换声后端）
 git clone https://github.com/GiantAILab/YingMusic-SVC third_party/YingMusic-SVC
 #    从 ModelScope giantailab/YingMusic-SVC 下载 bs_roformer.ckpt 放到 third_party/YingMusic-SVC/ckpt/
-#    （要用 YingMusic 换声再下 YingMusic-SVC-full.pt）
+#    （要用 YingMusic 换声再下 YingMusic-SVC-full.pt；它第一次运行会从 Hugging Face 下 Whisper / BigVGAN / RMVPE / CAMPPlus
+#     到 third_party/YingMusic-SVC/checkpoints，连不上的话把 third_party/seed-vc/checkpoints 整个复制过去，是同一批文件）
 
 # 3. 本工具自己的依赖（说话克隆另外几个包见 requirements.txt 里的注释）
 pip install -r requirements.txt
@@ -179,6 +184,10 @@ docs/原理与踩坑.md
 - [Qwen3-TTS](https://github.com/QwenLM/Qwen3-TTS)（代码和模型 Apache-2.0）：说话克隆；加速用 [faster-qwen3-tts](https://pypi.org/project/faster-qwen3-tts/)
 
 本仓库不包含任何模型权重，都是安装时从各自的官方源下载。
+
+## 交流群
+
+QQ 群 **426652308**：使用问题、bug、建议都可以来问，也欢迎摸鱼水群。群里的 Lux 是 AI 机器人，@她可以点歌。
 
 ## 许可证
 
